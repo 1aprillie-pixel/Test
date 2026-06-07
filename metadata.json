@@ -1,0 +1,11 @@
+{
+  "name": "Articulate to video ",
+  "description": "Short 3-second statement video recording app where users evaluate playback statements using mobile-style ✅ and ❌ buttons, with accumulated score tracking out of 10 and optional video history.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
