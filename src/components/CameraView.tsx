@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Challenge } from '../types';
-import { Camera, CameraOff, AlertCircle, Video, Play, Sparkles, Sliders } from 'lucide-react';
+import { Camera, CameraOff, AlertCircle, Video, Play, Sparkles, Sliders, Maximize2, Minimize2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface CameraViewProps {
@@ -31,6 +31,36 @@ export default function CameraView({
   const [isRecording, setIsRecording] = useState<boolean>(false);
   const [readyCount, setReadyCount] = useState<number>(3);
   const [recordTimeLeft, setRecordTimeLeft] = useState<number>(3.0); // 3.0 seconds
+
+  // Fullscreen support state & reference
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen?.().then(() => {
+        setIsFullscreen(true);
+      }).catch((err) => {
+        console.warn("Fullscreen request rejected, using seamless modal fallback.");
+        setIsFullscreen(true);
+      });
+    } else {
+      document.exitFullscreen?.().finally(() => {
+        setIsFullscreen(false);
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   // Start standard or virtual camera on load
   useEffect(() => {
@@ -278,22 +308,8 @@ export default function CameraView({
 
   // Record handler
   const handleRecordTrigger = () => {
-    if (isGettingReady || isRecording) return;
-    
-    setIsGettingReady(true);
-    setReadyCount(3);
-
-    // 3 second wait timer
-    const countdownInterval = setInterval(() => {
-      setReadyCount((prev) => {
-        if (prev <= 1) {
-          clearInterval(countdownInterval);
-          startRecording();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (isRecording) return;
+    startRecording();
   };
 
   const startRecording = () => {
@@ -365,21 +381,16 @@ export default function CameraView({
   };
 
   return (
-    <div id="camera-view" className="w-[100%] max-w-2xl mx-auto flex flex-col space-y-4 px-4">
+    <div 
+      id="camera-view" 
+      className="fixed inset-0 z-50 bg-neutral-950 flex flex-col justify-between p-4 md:p-8 animate-fade-in"
+    >
       
-      {/* Header index status */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-mono font-medium text-neutral-400 bg-neutral-100 px-2.5 py-1 rounded-full">
-          Challenge {challengeIndex + 1} of {totalChallenges}
-        </span>
-        <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-          <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-          <span>3-Second Active Hold</span>
-        </div>
-      </div>
-
       {/* Main Terminal Frame */}
-      <div className="relative w-full aspect-video bg-neutral-900 rounded-3xl overflow-hidden shadow-lg border border-neutral-100">
+      <div 
+        ref={containerRef}
+        className="relative w-full flex-1 h-full min-h-[60vh] bg-neutral-950 rounded-3xl border border-neutral-900 overflow-hidden"
+      >
         
         {/* Real video webcam stream tag */}
         <video
@@ -402,6 +413,11 @@ export default function CameraView({
 
         {/* Video Overlays */}
         <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-neutral-900/80 to-transparent p-6 text-center z-10">
+          <div className="flex justify-center mb-2">
+            <span className="text-[10px] font-mono font-bold tracking-wider text-amber-400 bg-amber-500/15 border border-amber-500/25 px-2.5 py-0.5 rounded-full uppercase">
+              Challenge {challengeIndex + 1} of {totalChallenges}
+            </span>
+          </div>
           <motion.h4 
             key={challenge.id}
             initial={{ y: -10, opacity: 0 }}
@@ -422,7 +438,7 @@ export default function CameraView({
           <button
             id="btn-trigger-record"
             onClick={handleRecordTrigger}
-            disabled={isGettingReady || isRecording}
+            disabled={isRecording}
             className={`relative group w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-lg border border-white/20 backdrop-blur-xs ${
               isRecording 
                 ? 'bg-neutral-800/90 ring-4 ring-red-500/40'
@@ -435,8 +451,6 @@ export default function CameraView({
                 transition={{ repeat: Infinity, duration: 1.5 }}
                 className="h-5 w-5 bg-white rounded-sm" 
               />
-            ) : isGettingReady ? (
-              <span className="text-white font-bold font-mono text-lg">{readyCount}</span>
             ) : (
               <Video className="w-5 h-5 text-white animate-pulse" />
             )}
@@ -445,37 +459,12 @@ export default function CameraView({
           <span className="text-[9px] font-extrabold uppercase tracking-widest text-white drop-shadow-md mt-1.5 filter opacity-90">
             {isRecording 
               ? 'RECORDING...' 
-              : isGettingReady 
-              ? 'SAY IT NOW!' 
               : 'TAP TO RECORD (3s)'}
           </span>
         </div>
 
         {/* Mode-specific full visual modals */}
         <AnimatePresence>
-          {isGettingReady && !useVirtual && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-neutral-950/80 flex flex-col items-center justify-center text-white z-25"
-            >
-              <motion.span
-                key={readyCount}
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 1.5, opacity: 0 }}
-                transition={{ duration: 0.3 }}
-                className="text-8xl font-display font-bold text-red-500"
-              >
-                {readyCount}
-              </motion.span>
-              <p className="text-sm tracking-wider font-semibold uppercase text-neutral-400 mt-4 animate-pulse">
-                GET READY...
-              </p>
-            </motion.div>
-          )}
-
           {isRecording && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -492,21 +481,21 @@ export default function CameraView({
       </div>
 
       {/* Device Configurations Panel */}
-      <div className="bg-white border border-neutral-100 rounded-2xl p-4 flex flex-col items-center shadow-xs">
-        <div className="flex items-center justify-between w-full text-xs">
+      <div className="bg-neutral-900 border border-neutral-850 rounded-2xl p-4 flex flex-col items-center shadow-xs mt-3">
+        <div className="flex items-center justify-between w-full text-xs text-neutral-300">
           <div className="flex items-center gap-1.5 text-neutral-400">
             <Sliders className="w-3.5 h-3.5" />
             <span>Setup Camera Device:</span>
           </div>
 
-          <div className="flex bg-neutral-100 p-0.5 rounded-lg border border-neutral-200/50">
+          <div className="flex bg-neutral-950 p-0.5 rounded-lg border border-neutral-800/50">
             <button
               id="toggle-real-cam"
               onClick={() => setUseVirtual(false)}
               className={`px-3 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
                 !useVirtual 
-                  ? 'bg-white shadow-xs text-neutral-900 text-[11px]' 
-                  : 'text-neutral-500 hover:text-neutral-700 text-[11px]'
+                  ? 'bg-neutral-800 shadow-xs text-white text-[11px]' 
+                  : 'text-neutral-500 hover:text-neutral-400 text-[11px]'
               }`}
             >
               Hardware Camera
@@ -516,8 +505,8 @@ export default function CameraView({
               onClick={() => setupVirtualStream()}
               className={`px-3 py-1.5 rounded-md font-semibold transition-all cursor-pointer ${
                 useVirtual 
-                  ? 'bg-white shadow-xs text-neutral-800 text-[11px]' 
-                  : 'text-neutral-500 hover:text-neutral-700 text-[11px]'
+                  ? 'bg-neutral-800 shadow-xs text-white text-[11px]' 
+                  : 'text-neutral-500 hover:text-neutral-400 text-[11px]'
               }`}
             >
               Sandbox Simulator
@@ -526,7 +515,7 @@ export default function CameraView({
         </div>
 
         {permissionError && !useVirtual && (
-          <div className="w-full text-center text-xs text-neutral-400 mt-2 bg-neutral-50 p-2.5 rounded-xl border border-neutral-100">
+          <div className="w-full text-center text-xs text-neutral-450 mt-2 bg-neutral-950 p-2.5 rounded-xl border border-neutral-850">
             🎥 Physical camera blocked inside sandbox. Switched seamlessly to Virtual simulator.
           </div>
         )}

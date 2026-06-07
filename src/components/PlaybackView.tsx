@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Challenge } from '../types';
-import { Check, X, Play, Pause, Volume2, VolumeX, RotateCcw } from 'lucide-react';
+import { Check, X, Play, Pause, Volume2, VolumeX, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface PlaybackViewProps {
@@ -129,6 +129,36 @@ export default function PlaybackView({
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [useVirtualPlayback, setUseVirtualPlayback] = useState<boolean>(false);
+
+  // Fullscreen support state & reference
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = () => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen?.().then(() => {
+        setIsFullscreen(true);
+      }).catch((err) => {
+        console.warn("Fullscreen request rejected, using seamless modal fallback.");
+        setIsFullscreen(true);
+      });
+    } else {
+      document.exitFullscreen?.().finally(() => {
+        setIsFullscreen(false);
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, []);
 
   // Evaluation visual/audio feedback state
   const [feedbackState, setFeedbackState] = useState<'idle' | 'correct' | 'incorrect'>('idle');
@@ -318,26 +348,16 @@ export default function PlaybackView({
   };
 
   return (
-    <div id="playback-view" className="w-[100%] max-w-2xl mx-auto flex flex-col space-y-4 px-4">
+    <div 
+      id="playback-view" 
+      className="fixed inset-0 z-50 bg-neutral-950 flex flex-col justify-between p-4 md:p-8 animate-fade-in"
+    >
       
-      {/* Top breadcrumb navigation */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-mono font-medium text-neutral-400 bg-neutral-100 px-2.5 py-1 rounded-full">
-          Evaluating Challenge {challengeIndex + 1} of {totalChallenges}
-        </span>
-        <button
-          id="btn-retry-recording"
-          onClick={onRetry}
-          disabled={feedbackState !== 'idle'}
-          className="text-xs font-semibold text-neutral-500 hover:text-neutral-800 disabled:opacity-40 flex items-center gap-1 bg-white border border-neutral-200 px-3 py-1.5 rounded-full transition-all cursor-pointer shadow-2xs"
-        >
-          <RotateCcw className="w-3.5 h-3.5" />
-          Re-record
-        </button>
-      </div>
-
       {/* Main Playback screen viewport with call overlays */}
-      <div className="relative w-full aspect-video bg-neutral-950 rounded-3xl overflow-hidden shadow-lg border border-neutral-900 group">
+      <div 
+        ref={containerRef}
+        className="relative w-full flex-1 h-full min-h-[60vh] bg-neutral-950 rounded-3xl border border-neutral-900 overflow-hidden"
+      >
         
         {/* Real MP4/WebM output tag */}
         <video
@@ -362,6 +382,11 @@ export default function PlaybackView({
 
         {/* Video Prompt Backdrop Header */}
         <div className="absolute inset-x-0 top-0 bg-gradient-to-b from-neutral-950/90 to-transparent p-6 text-center z-10">
+          <div className="flex justify-center mb-2">
+            <span className="text-[10px] font-mono font-bold tracking-wider text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-2.5 py-0.5 rounded-full uppercase">
+              Evaluating Challenge {challengeIndex + 1} of {totalChallenges}
+            </span>
+          </div>
           <h4 className="text-lg md:text-xl font-display font-bold text-white leading-snug drop-shadow-md">
             "{challenge.text}"
           </h4>
@@ -389,6 +414,21 @@ export default function PlaybackView({
               </span>
             </div>
 
+            {/* Re-record Option right in the middle */}
+            <div className="flex flex-col items-center justify-center">
+              <button
+                id="btn-retry-recording"
+                onClick={onRetry}
+                disabled={feedbackState !== 'idle'}
+                className="w-12 h-12 rounded-full bg-neutral-805 hover:bg-neutral-800 text-white border border-neutral-700/50 backdrop-blur-xs transition cursor-pointer flex items-center justify-center hover:scale-105 active:scale-95 disabled:opacity-45"
+              >
+                <RotateCcw className="w-4 h-4 text-white" />
+              </button>
+              <span className="text-[9px] font-extrabold tracking-wider text-neutral-300 drop-shadow-md mt-1.5 uppercase bg-neutral-950/40 px-2 py-0.5 rounded backdrop-blur-xs">
+                RE-TAKE
+              </span>
+            </div>
+
             {/* ✅ ACCEPT BUTTON */}
             <div className="flex flex-col items-center">
               <button
@@ -409,7 +449,7 @@ export default function PlaybackView({
 
         {/* Dynamic player utility controllers in top-right or overlay margins */}
         {feedbackState === 'idle' && (
-          <div className="absolute top-4 right-4 flex gap-2 z-10">
+          <div className="absolute top-4 right-4 flex gap-2 z-20">
             <button
               id="btn-playback-playpause"
               onClick={handleTogglePlayback}
@@ -529,8 +569,8 @@ export default function PlaybackView({
       </div>
 
       {/* Minimal status bar underneath to provide professional tips and keep the outer frame uncluttered */}
-      <div className="bg-white border border-neutral-100 rounded-2xl p-4 text-center">
-        <p className="text-[11px] text-neutral-400 font-serif italic max-w-md mx-auto leading-normal">
+      <div className="bg-neutral-900 border border-neutral-850 rounded-2xl p-4 text-center mt-3">
+        <p className="text-[11px] text-neutral-450 font-serif italic max-w-md mx-auto leading-normal">
           "Review speech playback. Grade objectively with Accept ✅ or Decline ❌ overlays directly on the video screen."
         </p>
       </div>
